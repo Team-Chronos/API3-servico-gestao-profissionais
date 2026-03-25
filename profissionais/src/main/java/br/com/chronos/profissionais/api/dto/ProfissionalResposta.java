@@ -1,10 +1,13 @@
 package br.com.chronos.profissionais.api.dto;
 
+import java.util.List;
+
 public record ProfissionalResposta(
-        Integer id,
+        int id,
         String nome,
         String email,
-        Boolean ativo,
-        Integer cargoId
+        boolean ativo,
+        int cargoId,
+        List<ProjetoVinculadoResposta> projetos
 ) {
 }

@@ -3,8 +3,10 @@ package br.com.chronos.profissionais.repositorio;
 import br.com.chronos.profissionais.dominio.ProfissionalProjeto;
 import br.com.chronos.profissionais.dominio.ProfissionalProjetoId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -17,4 +19,12 @@ public interface ProfissionalProjetoRepositorio extends JpaRepository<Profission
             where pp.profissional.id = :profissionalId
             """)
     List<ProfissionalProjeto> buscarPorProfissionalComProjeto(@Param("profissionalId") Integer profissionalId);
+
+        @Modifying
+        @Transactional
+        @Query("""
+            delete from ProfissionalProjeto pp
+            where pp.profissional.id = :profissionalId
+            """)
+        void deletarPorProfissionalId(@Param("profissionalId") Integer profissionalId);
 }

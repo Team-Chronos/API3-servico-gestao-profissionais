@@ -2,6 +2,7 @@ package br.com.chronos.profissionais.api;
 
 import br.com.chronos.profissionais.api.dto.ProfissionalRequisicao;
 import br.com.chronos.profissionais.api.dto.ProfissionalResposta;
+import br.com.chronos.profissionais.api.dto.ProjetoResumoResposta;
 import br.com.chronos.profissionais.api.dto.ProjetoVinculadoResposta;
 import br.com.chronos.profissionais.api.dto.VinculoProjetoRequisicao;
 import br.com.chronos.profissionais.servico.ProfissionalServico;
@@ -9,6 +10,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +25,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/profissionais")
+@CrossOrigin(origins = "*")
 public class ProfissionalControlador {
 
     private final ProfissionalServico profissionalServico;
@@ -37,8 +40,13 @@ public class ProfissionalControlador {
     }
 
     @GetMapping("/{id}")
-    public ProfissionalResposta buscarPorId(@PathVariable Integer id) {
+    public ProfissionalResposta buscarPorId(@PathVariable int id) {
         return profissionalServico.buscarPorId(id);
+    }
+
+    @GetMapping("/projetos")
+    public List<ProjetoResumoResposta> listarProjetosDisponiveis() {
+        return profissionalServico.listarProjetosDisponiveis();
     }
 
     @PostMapping
@@ -48,32 +56,32 @@ public class ProfissionalControlador {
     }
 
     @PutMapping("/{id}")
-    public ProfissionalResposta atualizar(@PathVariable Integer id, @Valid @RequestBody ProfissionalRequisicao request) {
+    public ProfissionalResposta atualizar(@PathVariable int id, @Valid @RequestBody ProfissionalRequisicao request) {
         return profissionalServico.atualizar(id, request);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletar(@PathVariable Integer id) {
+    public ResponseEntity<Void> deletar(@PathVariable int id) {
         profissionalServico.deletar(id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/projetos/{projetoId}")
-    public ResponseEntity<Void> vincularProjeto(@PathVariable Integer id,
-                                                @PathVariable Integer projetoId,
+    public ResponseEntity<Void> vincularProjeto(@PathVariable int id,
+                                                @PathVariable int projetoId,
                                                 @Valid @RequestBody VinculoProjetoRequisicao request) {
         profissionalServico.vincularProjeto(id, projetoId, request.valorHora());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     @DeleteMapping("/{id}/projetos/{projetoId}")
-    public ResponseEntity<Void> desvincularProjeto(@PathVariable Integer id, @PathVariable Integer projetoId) {
+    public ResponseEntity<Void> desvincularProjeto(@PathVariable int id, @PathVariable int projetoId) {
         profissionalServico.desvincularProjeto(id, projetoId);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/projetos")
-    public List<ProjetoVinculadoResposta> listarProjetosVinculados(@PathVariable Integer id) {
+    public List<ProjetoVinculadoResposta> listarProjetosVinculados(@PathVariable int id) {
         return profissionalServico.listarProjetosVinculados(id);
     }
 
