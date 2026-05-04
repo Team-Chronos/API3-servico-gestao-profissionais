@@ -20,11 +20,22 @@ public interface ProfissionalProjetoRepositorio extends JpaRepository<Profission
             """)
     List<ProfissionalProjeto> buscarPorProfissionalComProjeto(@Param("profissionalId") Integer profissionalId);
 
-        @Modifying
-        @Transactional
-        @Query("""
+    @Query("""
+            select pp
+            from ProfissionalProjeto pp
+            join fetch pp.projeto p
+            where pp.profissional.id in :profissionalIds
+            """)
+    List<ProfissionalProjeto> buscarPorProfissionaisComProjeto(@Param("profissionalIds") List<Integer> profissionalIds);
+
+    @Modifying
+    @Transactional
+    @Query("""
             delete from ProfissionalProjeto pp
             where pp.profissional.id = :profissionalId
             """)
-        void deletarPorProfissionalId(@Param("profissionalId") Integer profissionalId);
+    void deletarPorProfissionalId(@Param("profissionalId") Integer profissionalId);
+
+    @Query("select count(pp) > 0 from ProfissionalProjeto pp where pp.profissional.id = :profissionalId")
+    boolean existeVinculoPorProfissional(@Param("profissionalId") int profissionalId);
 }

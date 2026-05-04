@@ -21,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ProfissionalServico {
@@ -40,16 +42,24 @@ public class ProfissionalServico {
 
     @Cacheable(value = "profissionais")
     public List<ProfissionalResposta> listar() {
-        return profissionalRepositorio.findAll()
-                .stream()
-                .map(this::toResponse)
+        List<Profissional> profissionais = profissionalRepositorio.findAll();
+        if (profissionais.isEmpty()) return List.of();
+
+        List<Integer> ids = profissionais.stream().map(Profissional::getId).toList();
+        Map<Integer, List<ProfissionalProjeto>> vinculosPorProfissional =
+                profissionalProjetoRepositorio.buscarPorProfissionaisComProjeto(ids)
+                        .stream()
+                        .collect(Collectors.groupingBy(pp -> pp.getProfissional().getId()));
+
+        return profissionais.stream()
+                .map(p -> toResponse(p, vinculosPorProfissional.getOrDefault(p.getId(), List.of())))
                 .toList();
     }
 
     @Cacheable(value = "profissional", key = "#id")
     public ProfissionalResposta buscarPorId(int id) {
         Profissional profissional = buscarProfissionalOuFalhar(id);
-        return toResponse(profissional);
+        return toResponse(profissional, listarProjetosVinculadosInterno(id));
     }
 
     @Transactional
@@ -63,7 +73,7 @@ public class ProfissionalServico {
         preencherDados(profissional, request);
         Profissional salvo = profissionalRepositorio.save(profissional);
         sincronizarVinculos(salvo, request.projetos());
-        return toResponse(salvo);
+        return toResponse(salvo, listarProjetosVinculadosInterno(salvo.getId()));
     }
 
     @Transactional
@@ -78,13 +88,16 @@ public class ProfissionalServico {
         preencherDados(profissional, request);
         Profissional salvo = profissionalRepositorio.save(profissional);
         sincronizarVinculos(salvo, request.projetos());
-        return toResponse(salvo);
+        return toResponse(salvo, listarProjetosVinculadosInterno(salvo.getId()));
     }
 
     @Transactional
     @CacheEvict(value = { "profissionais", "profissional", "projetos-vinculados" }, allEntries = true)
     public void deletar(int id) {
         Profissional profissional = buscarProfissionalOuFalhar(id);
+        if (profissionalProjetoRepositorio.existeVinculoPorProfissional(id)) {
+            throw new IllegalArgumentException("Não é possivel excluir o profissional pois ele esta vinculado a projetos. Remova os vinculos antes de excluir.");
+        }
         profissionalRepositorio.delete(profissional);
     }
 
@@ -117,7 +130,7 @@ public class ProfissionalServico {
     @Transactional(readOnly = true)
     public List<ProjetoVinculadoResposta> listarProjetosVinculados(int profissionalId) {
         buscarProfissionalOuFalhar(profissionalId);
-        return listarProjetosVinculadosInterno(profissionalId);
+        return toProjetoVinculadoResposta(listarProjetosVinculadosInterno(profissionalId));
     }
 
     @Cacheable(value = "projetos-disponiveis")
@@ -133,9 +146,12 @@ public class ProfissionalServico {
                 .toList();
     }
 
-    private List<ProjetoVinculadoResposta> listarProjetosVinculadosInterno(int profissionalId) {
-        return profissionalProjetoRepositorio.buscarPorProfissionalComProjeto(profissionalId)
-                .stream()
+    private List<ProfissionalProjeto> listarProjetosVinculadosInterno(int profissionalId) {
+        return profissionalProjetoRepositorio.buscarPorProfissionalComProjeto(profissionalId);
+    }
+
+    private List<ProjetoVinculadoResposta> toProjetoVinculadoResposta(List<ProfissionalProjeto> vinculos) {
+        return vinculos.stream()
                 .map(v -> new ProjetoVinculadoResposta(
                         v.getProjeto().getId(),
                         v.getProjeto().getNome(),
@@ -149,27 +165,28 @@ public class ProfissionalServico {
                 .orElseThrow(() -> new EntityNotFoundException("Profissional nao encontrado."));
     }
 
-    private ProfissionalResposta toResponse(Profissional profissional) {
+    private ProfissionalResposta toResponse(Profissional profissional, List<ProfissionalProjeto> vinculos) {
         return new ProfissionalResposta(
                 profissional.getId(),
                 profissional.getNome(),
                 profissional.getEmail(),
                 profissional.getAtivo(),
                 profissional.getCargoId(),
-                listarProjetosVinculadosInterno(profissional.getId()));
+                toProjetoVinculadoResposta(vinculos));
     }
 
     private void preencherDados(Profissional profissional, ProfissionalRequisicao request) {
         profissional.setNome(request.nome());
         profissional.setEmail(request.email());
-
+        if (request.senhaHash() != null && !request.senhaHash().isBlank()) {
+            profissional.setSenhaHash(request.senhaHash());
+        }
         profissional.setAtivo(request.ativo());
         profissional.setCargoId(request.cargoId());
     }
 
     private void sincronizarVinculos(Profissional profissional, List<ProjetoVinculoRequisicao> projetos) {
-        if (projetos == null)
-            return;
+        if (projetos == null) return;
         Set<Integer> projetosProcessados = new HashSet<>();
         profissionalProjetoRepositorio.deletarPorProfissionalId(profissional.getId());
         for (ProjetoVinculoRequisicao projetoVinculo : projetos) {
@@ -177,8 +194,7 @@ public class ProfissionalServico {
                 throw new IllegalArgumentException("Projeto duplicado no cadastro do profissional.");
             }
             Projeto projeto = projetoRepositorio.findById(projetoVinculo.projetoId())
-                    .orElseThrow(
-                            () -> new EntityNotFoundException("Projeto nao encontrado: " + projetoVinculo.projetoId()));
+                    .orElseThrow(() -> new EntityNotFoundException("Projeto nao encontrado: " + projetoVinculo.projetoId()));
             ProfissionalProjeto vinculo = new ProfissionalProjeto();
             vinculo.setId(new ProfissionalProjetoId(projeto.getId(), profissional.getId()));
             vinculo.setProfissional(profissional);
